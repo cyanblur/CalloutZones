@@ -1,0 +1,12 @@
+﻿{
+    "name": "CalloutZones",
+    "author": "cyanblur",
+    "authorName": "cyanblur",
+    "version_number": "1.0.12",
+    "website_url": "https://github.com/cyanblur/CalloutZones/tree/master/CalloutZones",
+    "description": "Adds named points of interest to maps for callouts, viewable by entering or pinging the map.",
+    "dependencies": [
+        "bbepis-BepInExPack-5.4.2103",
+        "RiskofThunder-HookGenPatcher-1.2.9"
+    ]
+}
