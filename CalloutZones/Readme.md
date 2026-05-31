@@ -6,4 +6,4 @@ Names zones within each map and displays them in UI when entered, or in chat whe
 
 The intent is to standardize callouts in streaming settings, multiplayer, and competitive play.
 
-<img src="https://github.com/cyanblur/CalloutZones/blob/master/ThunderstoreContent/PingDemo.gif?raw=true"/>
+<img src="https://github.com/cyanblur/CalloutZones/blob/master/ThunderstoreContent/PingDemo.png?raw=true"/>
