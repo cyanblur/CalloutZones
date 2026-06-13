@@ -20,7 +20,7 @@ namespace CalloutZones
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "cyanblur";
         public const string PluginName = "CalloutZones";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "0.8.1";
 
         public const int MaxNodeDistance = 20;
 
@@ -54,7 +54,7 @@ namespace CalloutZones
         {
             showOnScreen = Config.Bind<UIDisplayOption>(
                 "Functionality",
-                "Show on screen",
+                "Show on UI",
                 UIDisplayOption.Always,
                 "Adds the current zone to your UI's healthbar group. Shows briefly upon entering a zone. If set to \"Once\" will only show that zone one time."
             );
@@ -76,7 +76,7 @@ namespace CalloutZones
             cfgXHeight = Config.Bind<int>(
                 "Display",
                 "X Offset",
-                460,
+                0,
                 "Adjust the X position of the zone text."
             );
 
@@ -107,8 +107,8 @@ namespace CalloutZones
                 }
             }
 
-            On.RoR2.PlayerCharacterMasterController.Update += UpdatePosition;
-            On.RoR2.Language.GetString_string += GetStringOverride;
+            On.RoR2.PlayerCharacterMasterController.Update += PlayerCharacterMasterController_Update_UpdatePosition;
+            On.RoR2.Language.GetString_string += Language_GetString_string_GetStringOverride;
             On.RoR2.UI.PingIndicator.RebuildPing += PingIndicator_RebuildPing_GrabNearestNodeName;
             On.RoR2.Run.BeginStage += Run_BeginStage;
             On.RoR2.UI.HUD.Awake += HUD_Awake;
@@ -152,7 +152,7 @@ namespace CalloutZones
             orig(self);
         }
 
-        private void PingIndicator_RebuildPing_GrabNearestNodeName(On.RoR2.UI.PingIndicator.orig_RebuildPing o, PingIndicator self)
+        private void PingIndicator_RebuildPing_GrabNearestNodeName(On.RoR2.UI.PingIndicator.orig_RebuildPing orig, PingIndicator self)
         {
             nearestPingNodeName = null;
             if (showOnPingGround.Value || showOnPingInteractable.Value)
@@ -170,26 +170,26 @@ namespace CalloutZones
                     }
                 }
             }
-            o(self);
+            orig(self);
         }
 
-        private string GetStringOverride(On.RoR2.Language.orig_GetString_string o, string token)
+        private string Language_GetString_string_GetStringOverride(On.RoR2.Language.orig_GetString_string orig, string token)
         {
             if (!string.IsNullOrWhiteSpace(nearestPingNodeName)
                 && ((token == "PLAYER_PING_DEFAULT" && showOnPingGround.Value)
                 || ((token == "PLAYER_PING_INTERACTABLE" || token == "PLAYER_PING_INTERACTABLE_WITH_COST") && showOnPingInteractable.Value)))
             {
-                return o(token) + $" <color=#{ColorUtility.ToHtmlStringRGB(pingColor.Value)}>({nearestPingNodeName})</color>";
+                return orig(token) + $" <color=#{ColorUtility.ToHtmlStringRGB(pingColor.Value)}>({nearestPingNodeName})</color>";
             }
             else
             { 
-                return o(token);
+                return orig(token);
             }
         }
 
-        private void UpdatePosition(On.RoR2.PlayerCharacterMasterController.orig_Update o, PlayerCharacterMasterController self)
+        private void PlayerCharacterMasterController_Update_UpdatePosition(On.RoR2.PlayerCharacterMasterController.orig_Update orig, PlayerCharacterMasterController self)
         {
-            o(self);
+            orig(self);
             var body = self.body;
             if (body != null)
             {
@@ -285,31 +285,46 @@ namespace CalloutZones
                 zoneHudElement = UnityEngine.Object.Instantiate(mapNameCluster.gameObject, bottomLeftClusterTransform);
 
                 var assignStageToken = zoneHudElement.GetComponent<AssignStageToken>();
-                Destroy(assignStageToken);
-
-                var mainTextTransform = zoneHudElement.transform.Find("MainText");
-                mainText = mainTextTransform.GetComponent<HGTextMeshProUGUI>();
-                mainText.GetTextInfo(nearestCharacterNodeName);
-                mainText.alignment = TextAlignmentOptions.Left;
+                if (assignStageToken)
+                {
+                    Destroy(assignStageToken);
+                }
 
                 try
                 {
-                    var subText = zoneHudElement.transform.Find("Subtext");
-                    subText.GetComponent<HGTextMeshProUGUI>().GetTextInfo("");
-                }
-                catch  { }
+                    var subTextTransform = zoneHudElement.transform.Find("Subtext");
+                    if (subTextTransform)
+                    {
+                        var subText = subTextTransform.GetComponent<HGTextMeshProUGUI>();
+                        if (subText)
+                        {
+                            subText.GetTextInfo("");
+                            subText.maxVisibleCharacters = 0;
+                        }
+                    }
 
+                }
+                catch { }
+                mainText = null;
+                typewriteTextController = null;
+            }
+
+            if (!mainText)
+            {
+                var mainTextTransform = zoneHudElement.transform.Find("MainText");
+                mainText = mainTextTransform.GetComponent<HGTextMeshProUGUI>();
+                mainText.alignment = TextAlignmentOptions.Left;
+            }
+
+            mainText.GetTextInfo(nearestCharacterNodeName);
+
+            if (!typewriteTextController)
+            {
                 typewriteTextController = zoneHudElement.GetComponent<TypewriteTextController>();
-                typewriteTextController.UpdateAllLabelTextInfo();
                 typewriteTextController.labels = new TextMeshProUGUI[] { mainText };
                 typewriteTextController.soundString = "";
                 typewriteTextController.disableObjectOnFadeEnd = false;
             }
-
-            if (!zoneHudElement)
-                return;
-
-            mainText.GetTextInfo(nearestCharacterNodeName);
 
             try
             {
@@ -513,7 +528,7 @@ namespace CalloutZones
         {
             if (!zoneHudElement) return;
             if (!canLoad) return;
-            zoneHudElement.transform.localPosition = new Vector3(cfgXHeight.Value, cfgYHeight.Value);
+            zoneHudElement.transform.localPosition = new Vector3(cfgXHeight.Value + 460, cfgYHeight.Value);
         }
 
         [ConCommand(commandName = "set_zone", flags = ConVarFlags.None, helpText = "CalloutZones debug command for setting the name for zone painting: `set_zone [name | empty to clear]`")]
@@ -535,7 +550,7 @@ namespace CalloutZones
             }
         }
 
-        [ConCommand(commandName = "show_zones", flags = ConVarFlags.None, helpText = "CalloutZones debug command for painting all the nodes with their name")]
+        [ConCommand(commandName = "show_zones", flags = ConVarFlags.None, helpText = "CalloutZones debug command for painting all the nodes with their current name. `show_zones [0 to clear]`")]
         public static void ShowZones(ConCommandArgs args)
         {
             var duration = float.PositiveInfinity;

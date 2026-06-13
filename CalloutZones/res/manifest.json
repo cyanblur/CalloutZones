@@ -2,7 +2,7 @@
     "name": "CalloutZones",
     "author": "cyanblur",
     "authorName": "cyanblur",
-    "version_number": "1.0.12",
+    "version_number": "0.8.1",
     "website_url": "https://github.com/cyanblur/CalloutZones/tree/master/CalloutZones",
     "description": "Adds named points of interest to maps for callouts, viewable by entering or pinging the map.",
     "dependencies": [

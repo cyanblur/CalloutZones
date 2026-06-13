@@ -16,8 +16,4 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="ThunderstoreContent\" />
-  </ItemGroup>
-
 </Project>
