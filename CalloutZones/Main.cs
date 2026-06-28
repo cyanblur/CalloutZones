@@ -20,11 +20,12 @@ namespace CalloutZones
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "cyanblur";
         public const string PluginName = "CalloutZones";
-        public const string PluginVersion = "0.8.1";
+        public const string PluginVersion = "0.8.4";
 
         public const int MaxNodeDistance = 20;
 
         public static ConfigEntry<UIDisplayOption> showOnScreen { get; set; }
+        public static ConfigEntry<float> fadeDelay { get; set; }
         public static ConfigEntry<bool> showOnPingGround { get; set; }
         public static ConfigEntry<bool> showOnPingInteractable { get; set; }
         public static ConfigEntry<int> cfgXHeight { get; set; }
@@ -57,6 +58,13 @@ namespace CalloutZones
                 "Show on UI",
                 UIDisplayOption.Always,
                 "Adds the current zone to your UI's healthbar group. Shows briefly upon entering a zone. If set to \"Once\" will only show that zone one time."
+            );
+
+            fadeDelay = Config.Bind<float>(
+                "Functionality",
+                "UI Duration",
+                2f,
+                "Time in seconds before the UI text fades. Set to 0 to never fade."
             );
 
             showOnPingGround = Config.Bind<bool>(
@@ -107,13 +115,14 @@ namespace CalloutZones
                 }
             }
 
-            On.RoR2.PlayerCharacterMasterController.Update += PlayerCharacterMasterController_Update_UpdatePosition;
             On.RoR2.Language.GetString_string += Language_GetString_string_GetStringOverride;
             On.RoR2.UI.PingIndicator.RebuildPing += PingIndicator_RebuildPing_GrabNearestNodeName;
             On.RoR2.Run.BeginStage += Run_BeginStage;
             On.RoR2.UI.HUD.Awake += HUD_Awake;
+            On.RoR2.UI.HUD.Update += HUD_Update_UpdatePosition;
             cfgXHeight.SettingChanged += CfgXHeight_SettingChanged;
             cfgYHeight.SettingChanged += CfgYHeight_SettingChanged;
+            fadeDelay.SettingChanged += FadeDelay_SettingChanged;
         }
 
         private static void CfgYHeight_SettingChanged(object sender, EventArgs e)
@@ -124,6 +133,11 @@ namespace CalloutZones
         private static void CfgXHeight_SettingChanged(object sender, EventArgs e)
         {
             SetNotifPosition();
+        }
+
+        private static void FadeDelay_SettingChanged(object sender, EventArgs e)
+        {
+            SetUIDuration();
         }
 
         private void HUD_Awake(On.RoR2.UI.HUD.orig_Awake orig, RoR2.UI.HUD self)
@@ -187,59 +201,55 @@ namespace CalloutZones
             }
         }
 
-        private void PlayerCharacterMasterController_Update_UpdatePosition(On.RoR2.PlayerCharacterMasterController.orig_Update orig, PlayerCharacterMasterController self)
+        private void HUD_Update_UpdatePosition(On.RoR2.UI.HUD.orig_Update orig, HUD self)
         {
             orig(self);
-            var body = self.body;
-            if (body != null)
+            var groundNodes = SceneInfo.instance.groundNodes;
+            if (groundNodes != null)
             {
-                var groundNodes = SceneInfo.instance.groundNodes;
-                if (groundNodes != null)
+                var closestNodeIndex = groundNodes.FindClosestNode(hud.targetMaster.playerCharacterMasterController.body.transform.position, HullClassification.Human, MaxNodeDistance);
+                if (closestNodeIndex != null && closestNodeIndex != NodeIndex.invalid)
                 {
-                    var closestNodeIndex = groundNodes.FindClosestNode(body.transform.position, HullClassification.Human, MaxNodeDistance);
-                    if (closestNodeIndex != null && closestNodeIndex != NodeIndex.invalid)
+                    var nodeIndex = closestNodeIndex.nodeIndex;
+
+                    // Debug zone building section, painting nodes with character
+                    if (!string.IsNullOrWhiteSpace(currentZone) && !historicalLocations[currentZone].Contains(nodeIndex))
                     {
-                        var nodeIndex = closestNodeIndex.nodeIndex;
-
-                        // Debug zone building section, painting nodes with character
-                        if (!string.IsNullOrWhiteSpace(currentZone) && !historicalLocations[currentZone].Contains(nodeIndex))
+                        historicalLocations[currentZone].Add(nodeIndex);
+                        if (stageZoneMappings[currentScene].ContainsKey(nodeIndex))
                         {
-                            historicalLocations[currentZone].Add(nodeIndex);
-                            if (stageZoneMappings[currentScene].ContainsKey(nodeIndex))
-                            {
-                                historicalLocations[stageZoneMappings[currentScene][nodeIndex]].Remove(nodeIndex);
-                            }
-                            stageZoneMappings[currentScene][nodeIndex] = currentZone;
-
-                            // Ping the resulting location
-                            if (nodePings.ContainsKey(nodeIndex))
-                            {
-                                nodePings[nodeIndex].DestroyPing();
-                                nodePings.Remove(nodeIndex);
-                            }
-                            Vector3 node = new Vector3();
-                            groundNodes.GetNodePosition(closestNodeIndex, out node);
-                            nodePings[nodeIndex] = CustomDrawPing(node, currentZone);
+                            historicalLocations[stageZoneMappings[currentScene][nodeIndex]].Remove(nodeIndex);
                         }
+                        stageZoneMappings[currentScene][nodeIndex] = currentZone;
 
-                        // Update the current zone name for display if player has moved into a new node group
-                        if (stageZoneMappings[currentScene].ContainsKey(closestNodeIndex.nodeIndex))
+                        // Ping the resulting location
+                        if (nodePings.ContainsKey(nodeIndex))
                         {
-                            bool updateText = nearestCharacterNodeName != stageZoneMappings[currentScene][closestNodeIndex.nodeIndex];
-                            if (updateText && !string.IsNullOrWhiteSpace(stageZoneMappings[currentScene][closestNodeIndex.nodeIndex]) && showOnScreen.Value != UIDisplayOption.Never)
+                            nodePings[nodeIndex].DestroyPing();
+                            nodePings.Remove(nodeIndex);
+                        }
+                        Vector3 node = new Vector3();
+                        groundNodes.GetNodePosition(closestNodeIndex, out node);
+                        nodePings[nodeIndex] = CustomDrawPing(node, currentZone);
+                    }
+
+                    // Update the current zone name for display if player has moved into a new node group
+                    if (stageZoneMappings[currentScene].ContainsKey(closestNodeIndex.nodeIndex))
+                    {
+                        bool updateText = nearestCharacterNodeName != stageZoneMappings[currentScene][closestNodeIndex.nodeIndex];
+                        if (updateText && !string.IsNullOrWhiteSpace(stageZoneMappings[currentScene][closestNodeIndex.nodeIndex]) && showOnScreen.Value != UIDisplayOption.Never)
+                        {
+                            nearestCharacterNodeName = stageZoneMappings[currentScene][closestNodeIndex.nodeIndex];
+                            if (showOnScreen.Value == UIDisplayOption.Once)
                             {
-                                nearestCharacterNodeName = stageZoneMappings[currentScene][closestNodeIndex.nodeIndex];
-                                if (showOnScreen.Value == UIDisplayOption.Once)
-                                {
-                                    if (visitHistory.Add(nearestCharacterNodeName))
-                                    {
-                                        CreateDisplay();
-                                    }
-                                }
-                                else
+                                if (visitHistory.Add(nearestCharacterNodeName))
                                 {
                                     CreateDisplay();
                                 }
+                            }
+                            else
+                            {
+                                CreateDisplay();
                             }
                         }
                     }
@@ -342,6 +352,7 @@ namespace CalloutZones
                 
             }
             SetNotifPosition();
+            SetUIDuration();
         }
 
         private static void TypewriteTextController_GenerateTimingInfo(On.RoR2.UI.TypewriteTextController.orig_GenerateTimingInfo o, TypewriteTextController self)
@@ -529,6 +540,13 @@ namespace CalloutZones
             if (!zoneHudElement) return;
             if (!canLoad) return;
             zoneHudElement.transform.localPosition = new Vector3(cfgXHeight.Value + 460, cfgYHeight.Value);
+        }
+
+        public static void SetUIDuration()
+        {
+            if (!typewriteTextController) return;
+            typewriteTextController.fadeOutDelay = fadeDelay.Value;
+            typewriteTextController.fadeOutAfterCompletion = (fadeDelay.Value > 0);
         }
 
         [ConCommand(commandName = "set_zone", flags = ConVarFlags.None, helpText = "CalloutZones debug command for setting the name for zone painting: `set_zone [name | empty to clear]`")]
