@@ -26,6 +26,7 @@ namespace CalloutZones
 
         public static ConfigEntry<UIDisplayOption> showOnScreen { get; set; }
         public static ConfigEntry<float> fadeDelay { get; set; }
+        public static ConfigEntry<bool> showOnPing { get; set; }
         public static ConfigEntry<bool> showOnPingGround { get; set; }
         public static ConfigEntry<bool> showOnPingInteractable { get; set; }
         public static ConfigEntry<int> cfgXHeight { get; set; }
@@ -55,28 +56,28 @@ namespace CalloutZones
         {
             showOnScreen = Config.Bind<UIDisplayOption>(
                 "Functionality",
-                "Show on UI",
+                "Show on HUD",
                 UIDisplayOption.Always,
-                "Adds the current zone to your UI's healthbar group. Shows briefly upon entering a zone. If set to \"Once\" will only show that zone one time."
+                "Adds the current zone to your HUD's healthbar group. Shows briefly upon entering a zone. If set to \"Once\" will only show that zone one time."
             );
 
             fadeDelay = Config.Bind<float>(
                 "Functionality",
-                "UI Duration",
+                "HUD text duration",
                 2f,
-                "Time in seconds before the UI text fades. Set to 0 to never fade."
+                "Time in seconds before the HUD text fades. Set to 0 to never fade."
             );
 
             showOnPingGround = Config.Bind<bool>(
                 "Functionality",
-                "Show on ping ground",
+                "Show on ping ground message",
                 true,
                 "When pinging the ground in a zone, changes the ping message."
             );
 
             showOnPingInteractable = Config.Bind<bool>(
                 "Functionality",
-                "Show on ping interactable",
+                "Show on ping interactable message",
                 true,
                 "When pinging an interactable in a zone, changes the ping message."
             );
@@ -100,6 +101,13 @@ namespace CalloutZones
                 "Ping Text Color",
                 Color.white,
                 "Hex color of the chat message for pinged zones."
+            );
+
+            showOnPing = Config.Bind<bool>(
+                "Display",
+                "Show on pings",
+                true,
+                "When pinging in a zone, replaces your name with the zone name on the ping indicator. Single player only."
             );
 
             var zoneDefinitions = CalloutZones.DefaultZones; //CalloutZones.GetZonesFromFile();
@@ -185,6 +193,10 @@ namespace CalloutZones
                 }
             }
             orig(self);
+            if (showOnPing.Value && RoR2Application.isInSinglePlayer && !string.IsNullOrWhiteSpace(nearestPingNodeName))
+            {
+                self.pingText.text = nearestPingNodeName;
+            }
         }
 
         private string Language_GetString_string_GetStringOverride(On.RoR2.Language.orig_GetString_string orig, string token)
