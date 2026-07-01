@@ -125,12 +125,30 @@ namespace CalloutZones
 
             On.RoR2.Language.GetString_string += Language_GetString_string_GetStringOverride;
             On.RoR2.UI.PingIndicator.RebuildPing += PingIndicator_RebuildPing_GrabNearestNodeName;
-            On.RoR2.Run.BeginStage += Run_BeginStage;
+            Stage.onStageStartGlobal += Stage_onStageStartGlobal;
             On.RoR2.UI.HUD.Awake += HUD_Awake;
             On.RoR2.UI.HUD.Update += HUD_Update_UpdatePosition;
             cfgXHeight.SettingChanged += CfgXHeight_SettingChanged;
             cfgYHeight.SettingChanged += CfgYHeight_SettingChanged;
             fadeDelay.SettingChanged += FadeDelay_SettingChanged;
+        }
+
+        private void Stage_onStageStartGlobal(Stage obj)
+        {
+            currentScene = SceneCatalog.currentSceneDef.cachedName;
+            currentZone = "";
+            historicalLocations = new Dictionary<string, HashSet<int>>();
+            zoneColors = new Dictionary<string, Color>();
+            if (!stageZoneMappings.ContainsKey(currentScene))
+            {
+                stageZoneMappings[currentScene] = new Dictionary<int, string>();
+            }
+            nodePings = new Dictionary<int, PingIndicator>();
+            nearestPingNodeName = "";
+            nearestCharacterNodeName = "";
+            visitHistory = new HashSet<string>();
+            canLoad = true;
+            messageFailures = 0;
         }
 
         private static void CfgYHeight_SettingChanged(object sender, EventArgs e)
@@ -152,26 +170,6 @@ namespace CalloutZones
         {
             orig(self);
             hud = self;
-        }
-
-        private void Run_BeginStage(On.RoR2.Run.orig_BeginStage orig, Run self)
-        {
-            currentScene = SceneCatalog.currentSceneDef.cachedName;
-            currentZone = "";
-            historicalLocations = new Dictionary<string, HashSet<int>>();
-            zoneColors = new Dictionary<string, Color>();
-            if (!stageZoneMappings.ContainsKey(currentScene))
-            {
-                stageZoneMappings[currentScene] = new Dictionary<int, string>();
-            }
-            nodePings = new Dictionary<int, PingIndicator>();
-            nearestPingNodeName = "";
-            nearestCharacterNodeName = "";
-            visitHistory = new HashSet<string>();
-            canLoad = true;
-            messageFailures = 0;
-
-            orig(self);
         }
 
         private void PingIndicator_RebuildPing_GrabNearestNodeName(On.RoR2.UI.PingIndicator.orig_RebuildPing orig, PingIndicator self)
@@ -216,6 +214,7 @@ namespace CalloutZones
         private void HUD_Update_UpdatePosition(On.RoR2.UI.HUD.orig_Update orig, HUD self)
         {
             orig(self);
+            if (!hud.targetMaster?.playerCharacterMasterController?.body?.transform) return;
             var groundNodes = SceneInfo.instance.groundNodes;
             if (groundNodes != null)
             {
