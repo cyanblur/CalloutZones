@@ -7,8 +7,6 @@ using static RoR2.Navigation.NodeGraph;
 using System;
 using BepInEx.Configuration;
 using TMPro;
-using UnityEngine.XR;
-using static RoR2.UI.TypewriteTextController;
 [assembly: HG.Reflection.SearchableAttribute.OptIn]
 
 namespace CalloutZones
@@ -20,13 +18,14 @@ namespace CalloutZones
         public const string PluginGUID = PluginAuthor + "." + PluginName;
         public const string PluginAuthor = "cyanblur";
         public const string PluginName = "CalloutZones";
-        public const string PluginVersion = "0.8.4";
+        public const string PluginVersion = "1.0.0";
 
-        public const int MaxNodeDistance = 20;
+        private const int MaxNodeDistance = 20;
 
         public static ConfigEntry<UIDisplayOption> showOnScreen { get; set; }
         public static ConfigEntry<float> fadeDelay { get; set; }
         public static ConfigEntry<bool> showOnPing { get; set; }
+        public static ConfigEntry<bool> showOnPingMultiplayer { get; set; }
         public static ConfigEntry<bool> showOnPingGround { get; set; }
         public static ConfigEntry<bool> showOnPingInteractable { get; set; }
         public static ConfigEntry<int> cfgXHeight { get; set; }
@@ -45,12 +44,10 @@ namespace CalloutZones
         private static string nearestCharacterNodeName = "";
 
         private static HUD hud = null;
-        public static GameObject zoneHudElement;
-        public static HGTextMeshProUGUI mainText;
-        public static TypewriteTextController typewriteTextController;
-        public static bool canLoad = false;
-
-        private static int messageFailures = 0;
+        private static GameObject zoneHudElement;
+        private static HGTextMeshProUGUI mainText;
+        private static TypewriteTextController typewriteTextController;
+        private static bool canLoad = false;
 
         public void Awake()
         {
@@ -110,6 +107,13 @@ namespace CalloutZones
                 "When pinging in a zone, replaces your name with the zone name on the ping indicator. Single player only."
             );
 
+            showOnPingMultiplayer = Config.Bind<bool>(
+                "Display",
+                "Show on pings (Online)",
+                false,
+                "When pinging in a zone, replaces your name or your teammate's name with the zone name on the ping indicator. Multiplayer only."
+            );
+
             var zoneDefinitions = CalloutZones.DefaultZones; //CalloutZones.GetZonesFromFile();
             foreach (var scene in zoneDefinitions.Keys)
             {
@@ -148,7 +152,6 @@ namespace CalloutZones
             nearestCharacterNodeName = "";
             visitHistory = new HashSet<string>();
             canLoad = true;
-            messageFailures = 0;
         }
 
         private static void CfgYHeight_SettingChanged(object sender, EventArgs e)
@@ -191,7 +194,7 @@ namespace CalloutZones
                 }
             }
             orig(self);
-            if (showOnPing.Value && RoR2Application.isInSinglePlayer && !string.IsNullOrWhiteSpace(nearestPingNodeName))
+            if (((showOnPing.Value && RoR2Application.isInSinglePlayer) || (showOnPingMultiplayer.Value && !RoR2Application.isInSinglePlayer)) && !string.IsNullOrWhiteSpace(nearestPingNodeName))
             {
                 self.pingText.text = nearestPingNodeName;
             }
@@ -347,203 +350,10 @@ namespace CalloutZones
                 typewriteTextController.disableObjectOnFadeEnd = false;
             }
 
-            try
-            {
-                typewriteTextController.StartTyping();
-            }
-            catch (Exception ex)
-            {
-                messageFailures++;
-                if (messageFailures == 3)
-                {
-                    Debug.Log("Switching TypewriteTextController behaviors to traceable output");
-                    On.RoR2.UI.TypewriteTextController.GenerateTimingInfo += TypewriteTextController_GenerateTimingInfo;
-                    On.RoR2.UI.TypewriteTextController.SetTime += TypewriteTextController_SetTime;
-                }
-                
-            }
+            typewriteTextController.StartTyping();
+
             SetNotifPosition();
             SetUIDuration();
-        }
-
-        private static void TypewriteTextController_GenerateTimingInfo(On.RoR2.UI.TypewriteTextController.orig_GenerateTimingInfo o, TypewriteTextController self)
-        {
-            string failureTracePoint = "0";
-            try
-            {
-                self.UpdateAllLabelTextInfo();
-                failureTracePoint = "1";
-                TimedTextChunk currentTimedTextChunk = default(TimedTextChunk);
-                bool flag = self.delayBetweenSentences > 0f;
-                failureTracePoint = "A";
-                bool flag2 = self.delayBetweenTexts > 0f;
-                failureTracePoint = "B";
-                bool flag3 = self.delayBetweenNewLines > 0f;
-                failureTracePoint = "C";
-                self.totalCharacterCount = 0;
-                failureTracePoint = "D";
-                for (int i = 0; i < self.labels.Length; i++)
-                {
-                    TextMeshProUGUI textMeshProUGUI = self.labels[i];
-                    failureTracePoint = "E0";
-                    if (!textMeshProUGUI)
-                    {
-                        continue;
-                    }
-                    TMP_TextInfo textInfo = textMeshProUGUI.textInfo;
-                    failureTracePoint = "E1";
-                    StartNewChunk(textMeshProUGUI, self.delayBetweenKeys);
-                    failureTracePoint = "E2";
-                    self.totalCharacterCount += textInfo.characterCount;
-                    failureTracePoint = "E3";
-                    if (flag2 && i > 0)
-                    {
-                        currentTimedTextChunk.duration = self.delayBetweenTexts;
-                        failureTracePoint = "E4";
-                        StartNewChunk(textMeshProUGUI, self.delayBetweenKeys);
-                        failureTracePoint = "E5";
-                    }
-                    else if (i == 0)
-                    {
-                        currentTimedTextChunk.duration = self.initialDelay;
-                        failureTracePoint = "E6";
-                        StartNewChunk(textMeshProUGUI, self.delayBetweenKeys);
-                        failureTracePoint = "E7";
-                    }
-                    failureTracePoint = "F";
-                    int num = Math.Min(textInfo.characterCount, textInfo.characterInfo.Length);
-                    failureTracePoint = "G";
-                    while (currentTimedTextChunk.endCharIndex < num)
-                    {
-                        ref TMP_CharacterInfo reference = ref textInfo.characterInfo[currentTimedTextChunk.endCharIndex];
-                        failureTracePoint = "H1";
-                        if (flag && IsEndOfSentence(textInfo, in reference))
-                        {
-                            StartNewChunk(textMeshProUGUI, self.delayBetweenSentences);
-                            failureTracePoint = "H2";
-                            currentTimedTextChunk.endCharIndex++;
-                            failureTracePoint = "H3";
-                            StartNewChunk(textMeshProUGUI, self.delayBetweenKeys);
-                            failureTracePoint = "H4";
-                        }
-                        else if (flag3 && reference.character == '\n')
-                        {
-                            StartNewChunk(textMeshProUGUI, self.delayBetweenNewLines);
-                            failureTracePoint = "H5";
-                            currentTimedTextChunk.endCharIndex++;
-                            failureTracePoint = "H6";
-                            StartNewChunk(textMeshProUGUI, self.delayBetweenKeys);
-                            failureTracePoint = "H7";
-                        }
-                        currentTimedTextChunk.endCharIndex++;
-                        failureTracePoint = "H8";
-                    }
-                }
-                StartNewChunk(null, 0f);
-                failureTracePoint = "I";
-                self.textChunks = sharedChunkBuilder.ToArray();
-                failureTracePoint = "J";
-                TypewriteTextController.sharedChunkBuilder.Clear();
-                failureTracePoint = "K";
-                self.totalTypingDuration = 0f;
-                failureTracePoint = "L";
-                if (self.textChunks.Length != 0)
-                {
-                    failureTracePoint = "M";
-                    ref TimedTextChunk reference2 = ref self.textChunks[self.textChunks.Length - 1];
-                    failureTracePoint = "N";
-                    self.totalTypingDuration = reference2.startTime + reference2.duration;
-                    failureTracePoint = "O";
-                }
-                self.totalFadingDuration = self.fadeOutDelay + self.fadeOutDuration;
-                failureTracePoint = "P";
-                self.typingTimeScale = 1f;
-                self.fadingTimeScale = 1f;
-                failureTracePoint = "Q";
-                if (self.timeToFit > 0f)
-                {
-                    failureTracePoint = "R";
-                    if (self.includeFadeoutInTimeToFit)
-                    {
-                        failureTracePoint = "S";
-                        self.fadingTimeScale = (self.typingTimeScale = (self.totalTypingDuration + self.fadeOutDelay + self.fadeOutDuration) / self.timeToFit);
-                        failureTracePoint = "T";
-                    }
-                    else
-                    {
-                        self.typingTimeScale = self.totalTypingDuration / self.timeToFit;
-                        failureTracePoint = "U";
-                    }
-                }
-                void StartNewChunk(TextMeshProUGUI label, float interval)
-                {
-                    failureTracePoint = "V0";
-                    if (currentTimedTextChunk.endCharIndex != currentTimedTextChunk.startCharIndex)
-                    {
-                        failureTracePoint = "V1";
-                        currentTimedTextChunk.duration = (float)(currentTimedTextChunk.endCharIndex - currentTimedTextChunk.startCharIndex) * currentTimedTextChunk.interval;
-
-                        failureTracePoint = "V2";
-                    }
-                    if (currentTimedTextChunk.duration > 0f)
-                    {
-                        failureTracePoint = "V3";
-                        sharedChunkBuilder.Add(currentTimedTextChunk);
-                        failureTracePoint = "V4";
-                    }
-                    float startTime = currentTimedTextChunk.startTime + currentTimedTextChunk.duration;
-                    failureTracePoint = "V5";
-                    int num2 = currentTimedTextChunk.endCharIndex;
-                    failureTracePoint = "V6";
-                    if ((object)label != currentTimedTextChunk.label)
-                    {
-                        failureTracePoint = "V7";
-                        num2 = 0;
-                    }
-                    currentTimedTextChunk = new TimedTextChunk
-                    {
-                        label = label,
-                        startTime = startTime,
-                        duration = 0f,
-                        startCharIndex = num2,
-                        endCharIndex = num2,
-                        interval = interval
-                    };
-                    failureTracePoint = "V8";
-                }
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"Exception in GenerateTimingInfo at trace point {failureTracePoint}: {ex}");
-            }
-        }
-
-        private static void TypewriteTextController_SetTime(On.RoR2.UI.TypewriteTextController.orig_SetTime orig, TypewriteTextController self, float t)
-        {
-            string failureTracePoint = "A";
-            try
-            {
-                float num = self.totalTypingDuration / self.typingTimeScale;
-                failureTracePoint = "B";
-                float typingTime = Mathf.Clamp(t * self.typingTimeScale, 0f, self.totalTypingDuration);
-                failureTracePoint = "C";
-                float fadingTime = Mathf.Clamp((t - num) * self.fadingTimeScale, 0f, self.totalFadingDuration);
-                failureTracePoint = "D";
-                self.SetTypingTime(typingTime);
-                failureTracePoint = "E";
-                self.SetFadingTime(fadingTime);
-                failureTracePoint = "F";
-                if (self.isDoneTyping && self.isDoneFading)
-                {
-                    failureTracePoint = "G";
-                    self.isPlayingAnimation = false;
-                }
-                failureTracePoint = "H";
-            }
-            catch(Exception ex)
-            {
-                Debug.LogError($"Exception in SetTime at trace point {failureTracePoint}: {ex}");
-            }
         }
 
         public static void SetNotifPosition()
