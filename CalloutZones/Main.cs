@@ -130,7 +130,6 @@ namespace CalloutZones
             On.RoR2.Language.GetString_string += Language_GetString_string_GetStringOverride;
             On.RoR2.UI.PingIndicator.RebuildPing += PingIndicator_RebuildPing_GrabNearestNodeName;
             Stage.onStageStartGlobal += Stage_onStageStartGlobal;
-            On.RoR2.UI.HUD.Awake += HUD_Awake;
             On.RoR2.UI.HUD.Update += HUD_Update_UpdatePosition;
             cfgXHeight.SettingChanged += CfgXHeight_SettingChanged;
             cfgYHeight.SettingChanged += CfgYHeight_SettingChanged;
@@ -167,12 +166,6 @@ namespace CalloutZones
         private static void FadeDelay_SettingChanged(object sender, EventArgs e)
         {
             SetUIDuration();
-        }
-
-        private void HUD_Awake(On.RoR2.UI.HUD.orig_Awake orig, RoR2.UI.HUD self)
-        {
-            orig(self);
-            hud = self;
         }
 
         private void PingIndicator_RebuildPing_GrabNearestNodeName(On.RoR2.UI.PingIndicator.orig_RebuildPing orig, PingIndicator self)
@@ -217,6 +210,8 @@ namespace CalloutZones
         private void HUD_Update_UpdatePosition(On.RoR2.UI.HUD.orig_Update orig, HUD self)
         {
             orig(self);
+            if (!canLoad) return;
+            if (!hud) hud = self;
             if (!hud.targetMaster?.playerCharacterMasterController?.body?.transform) return;
             var groundNodes = SceneInfo.instance.groundNodes;
             if (groundNodes != null)
